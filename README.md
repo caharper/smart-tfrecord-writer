@@ -1,6 +1,6 @@
 # Project Name
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 [![Python](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 [![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](CONTRIBUTING.md)
 ![Development Status](https://img.shields.io/badge/development-active-brightgreen.svg)
@@ -16,6 +16,7 @@ A brief description of your project.
   - [Usage](#usage)
   - [Contributing](#contributing)
   - [Why use smart-tfrecord-writer instead of TFDS CLI?](#why-use-smart-tfrecord-writer-instead-of-tfds-cli)
+  - [Gotchas](#gotchas)
   - [License](#license)
   - [Contact](#contact)
 
@@ -54,6 +55,10 @@ Please ensure your code adheres to the project's coding style and conventions.
 The TFDS CLI is great!  The purpose of smart-tfrecord-writer is to further reduce the complexity of formatting data and saving data into the TFRecord format.  Instead of having to read verbose documentation, we hope to make the process as simple as possible by providing just a few parameters and overwriting a few functions to get the most out of your ML pipeline.  
 
 Most projects could benefit from using TFRecords, but it requires a lot of reading, looking at several coding examples, etc.  Our project aims to help limit the time spent on converting your data over to the TFRecord format so you can take advantage of the speed of TFRecord and start training your models and not waste time elsewhere.  TFDS CLI will give you more control at the cost of more documentation and formatting, but most datasets can be handled in a simpler way, enter smart-tfrecord-writer!
+
+## Gotchas
+
+Right now, `tf.data.Dataset` objects are not supported.  A few assumptions in our codebase (knowing the length of the dataset for splitting into shards and writing individual shards instead of looping over a single object.  The second is problematic for a `tf.data.Dataset` because it is not guaranteed to be deterministic so we would need to have a separate handler for `tf.data.Dataset` objects.)
 
 ## License
 
