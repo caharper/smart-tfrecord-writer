@@ -1,0 +1,6 @@
+__pycache__
+*testing*
+*test*
+*.tfrecord
+*smart_tfrecord_writer.egg-info/
+*.egg
