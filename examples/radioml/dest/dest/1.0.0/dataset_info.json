@@ -1,0 +1,42 @@
+{
+  "citation": "@ARTICLE{8267032,\n    author={O\u2019Shea, Timothy James and Roy, Tamoghna and Clancy, T. Charles},\n    journal={IEEE Journal of Selected Topics in Signal Processing}, \n    title={Over-the-Air Deep Learning Based Radio Signal Classification}, \n    year={2018},\n    volume={12},\n    number={1},\n    pages={168-179},\n    doi={10.1109/JSTSP.2018.2797022}}",
+  "description": "A dataset which includes both synthetic simulated channel effects of 24 digital \nand analog modulation types which has been validated.  This dataset was used in \nthe paper Over-the-air deep learning based radio signal classification which was\npublished in 2017 in IEEE Journal of Selected Topics in Signal Processing, which \nprovides additional details and description of the dataset.",
+  "fileFormat": "tfrecord",
+  "location": {
+    "urls": [
+      "https://www.deepsig.ai/datasets"
+    ]
+  },
+  "name": "dest",
+  "splits": [
+    {
+      "filepathTemplate": "{DATASET}-{SPLIT}.{FILEFORMAT}-{SHARD_X_OF_Y}",
+      "name": "train",
+      "numBytes": "24801000",
+      "shardLengths": [
+        "3000"
+      ]
+    },
+    {
+      "filepathTemplate": "{DATASET}-{SPLIT}.{FILEFORMAT}-{SHARD_X_OF_Y}",
+      "name": "test",
+      "numBytes": "8267000",
+      "shardLengths": [
+        "1000"
+      ]
+    }
+  ],
+  "supervisedKeys": {
+    "tuple": {
+      "items": [
+        {
+          "featureKey": "rf_signal"
+        },
+        {
+          "featureKey": "label"
+        }
+      ]
+    }
+  },
+  "version": "1.0.0"
+}

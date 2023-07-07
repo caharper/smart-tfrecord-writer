@@ -1,0 +1,36 @@
+{
+    "pythonClassName": "tensorflow_datasets.core.features.features_dict.FeaturesDict",
+    "featuresDict": {
+        "features": {
+            "rf_signal": {
+                "pythonClassName": "tensorflow_datasets.core.features.tensor_feature.Tensor",
+                "tensor": {
+                    "shape": {
+                        "dimensions": [
+                            "1024",
+                            "2"
+                        ]
+                    },
+                    "dtype": "float32",
+                    "encoding": "none"
+                },
+                "description": "A radio signal with I and Q components."
+            },
+            "label": {
+                "pythonClassName": "tensorflow_datasets.core.features.class_label_feature.ClassLabel",
+                "classLabel": {
+                    "numClasses": "24"
+                }
+            },
+            "snr": {
+                "pythonClassName": "tensorflow_datasets.core.features.scalar.Scalar",
+                "tensor": {
+                    "shape": {},
+                    "dtype": "float32",
+                    "encoding": "none"
+                },
+                "description": "Average SNR of the signal."
+            }
+        }
+    }
+}
