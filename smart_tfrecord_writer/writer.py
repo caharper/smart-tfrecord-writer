@@ -1,5 +1,6 @@
 # from abc import abstractmethod
 import tensorflow as tf
+import tensorflow_datasets as tfds
 import math
 import warnings
 import numpy as np
@@ -9,27 +10,77 @@ import os
 
 
 class Writer(object):
-    def __init__(self, source_directory, destination_directory):
+    def __init__(
+        self, source_directory, destination_directory, config=None, version="1.0.0"
+    ):
         self.source_directory = source_directory
         self.destination_directory = destination_directory
 
-        if not os.path.exists(source_directory):
-            raise ValueError(f"Source directory, {source_directory}, does not exist.")
+        if not os.path.exists(self.source_directory):
+            raise ValueError(
+                f"Source directory, {self.source_directory}, does not exist."
+            )
 
-        if not os.path.exists(destination_directory):
-            os.mkdir(destination_directory)
+        if not os.path.exists(self.destination_directory):
+            os.mkdir(self.destination_directory)
 
-    # @staticmethod
-    def example_definition(self, instance):
+        self.version = version
+
+        if config is None:
+            config = self.destination_directory.split("/")[-1]
+        self.config = config
+
+        if not os.path.exists(os.path.join(self.destination_directory, self.config)):
+            os.mkdir(os.path.join(self.destination_directory, self.config))
+
+        if not os.path.exists(
+            os.path.join(self.destination_directory, self.config, self.version)
+        ):
+            os.mkdir(
+                os.path.join(self.destination_directory, self.config, self.version)
+            )
+
+    def extend_meta_data(self):
+        description = ""
+        homepage = ""
+        supervised_keys = None
+        citation = ""
+
+        return description, homepage, supervised_keys, citation
+
+    def _write_meta_data(self, split_infos):
+        (
+            description,
+            homepage,
+            supervised_keys,
+            citation,
+        ) = self.extend_meta_data()
+
+        tfds.folder_dataset.write_metadata(
+            data_dir=os.path.join(
+                self.destination_directory, self.config, self.version
+            ),
+            features=self._features,
+            split_infos=split_infos,
+            filename_template="{DATASET}-{SPLIT}.{FILEFORMAT}-{SHARD_X_OF_Y}",
+            description=description,
+            homepage=homepage,
+            version=self.version,
+            supervised_keys=supervised_keys,
+            citation=citation,
+        )
+
+    def features(self):
         """Define entries within a single TFRecord example proto
 
         Assumes the output will be serialized with .SerializeToString()
         """
-        raise NotImplementedError(
-            f"example_definition must be defined when subclassing Writer"
-        )
+        raise NotImplementedError(f"features must be defined when subclassing Writer")
 
-    # @staticmethod
+    @property
+    def _features(self):
+        return self.features()
+
     def process_data(self, example):
         """Processing to clean the data before converting the data over to a TFRecord
         example.  For instance, process_data(filename) would accept a file name, load
@@ -46,6 +97,11 @@ class Writer(object):
             f"process_data must be defined when subclassing Writer"
         )
 
+    def _process_data(self, example):
+        processed_data = self.process_data(example)
+        # print(self._features.to_json_content())
+        return self._features.serialize_example(processed_data)
+
     def _estimate_bytes_per_example(self, info, n_estimates, verbose=0):
         if verbose > 0:
             print("Estimating bytes per example...")
@@ -53,8 +109,9 @@ class Writer(object):
         total_bytes = 0
 
         for instance in info[:n_estimates]:
-            processed_data = self.process_data(instance)
-            serialized_data = self.example_definition(processed_data)
+            # processed_data = self.process_data(instance)
+            # serialized_data = self._features.serialize_example(processed_data)
+            serialized_data = self._process_data(instance)
             total_bytes += len(serialized_data)
 
         avg_bytes_per_example = total_bytes / n_estimates
@@ -79,19 +136,25 @@ class Writer(object):
         else:
             shard_pbar = shard_info
 
-        with tf.io.TFRecordWriter(
-            os.path.join(self.destination_directory, shard_name)
-        ) as out:
+        shard_name = os.path.join(
+            self.destination_directory, self.config, self.version, shard_name
+        )
+        with tf.io.TFRecordWriter(shard_name) as out:
             for example in shard_pbar:
-                processed_data = self.process_data(example)
-                serialized_data = self.example_definition(processed_data)
+                # processed_data = self.process_data(example)
+                # serialized_data = self._features.serialize_example(processed_data)
+                serialized_data = self._process_data(example)
                 out.write(serialized_data)
+
+        return os.path.getsize(shard_name)
 
     def _write_shards(self, splits_shards, verbose=0):
         if verbose > 0:
             split_pbar = tqdm(splits_shards, desc="Writing splits")  # 1, ...,
         else:
             split_pbar = splits_shards
+
+        split_infos = []
 
         for split in split_pbar:
             split_name = split["name"]
@@ -105,12 +168,28 @@ class Writer(object):
             else:
                 shard_pbar = split["shards"]
 
-            for i, shard in enumerate(shard_pbar, 1):
+            split_bytes = 0
+            for i, shard in enumerate(shard_pbar):
                 # Get the shard name
-                shard_name = f"{split_name}-{i}-of-{num_shards}.tfrecord"
+                shard_name = f"{self.destination_directory}-{split_name}.tfrecord-{i:05d}-of-{num_shards:05d}"
 
                 # Write single shard
-                self._write_shard(shard, shard_name, verbose=verbose)
+                bytes = self._write_shard(shard, shard_name, verbose=verbose)
+
+                # Get bytes information
+                split_bytes += bytes
+
+            # Create split information
+            split_infos.append(
+                tfds.core.SplitInfo(
+                    name=split_name,
+                    shard_lengths=[len(shard) for shard in split["shards"]],
+                    num_bytes=split_bytes,
+                    # filename_template="{DATASET}-{SPLIT}.{FILEFORMAT}-{SHARD_X_OF_Y}",
+                )
+            )
+
+        self._write_meta_data(split_infos)
 
     def _create_shards(self, info, examples_per_shard):
         n_shards = math.ceil(len(info) / examples_per_shard)
@@ -132,40 +211,28 @@ class Writer(object):
         n_estimates_mb_per_split_example=None,
         verbose=0,
     ):
-        """_summary_
+        """Writes data into a TFRecord format.
 
         Parameters
         ----------
-        train_info : array-like, optional
-            Information for training data.  Each entry will be iterated over as a single
-            instance processed by `process_data`.  Cannot be supplied if `train_shards`
-            is also supplied.  By default None.
-        train_shards : _type_, optional
-            _description_, by default None
-        val_info : _type_, optional
-            _description_, by default None
-        val_shards : _type_, optional
-            _description_, by default None
-        test_info : _type_, optional
-            _description_, by default None
-        test_shards : _type_, optional
-            _description_, by default None
+        splits_info : list, optional
+            List of dictionaries containing information to be iterated over, by default None
+        splits_shards : list, optional
+            List of precomputed shards to be saved and iterated over, by default None
         shuffle : bool, optional
-            _description_, by default True
+            Whether or not to shuffle the data provided, by default True
         random_seed : int, optional
-            _description_, by default 42
-        files_per_shard : _type_, optional
-            _description_, by default None
-        mb_per_shard : _type_, optional
-            _description_, by default None
+            Random seed provided to shuffle for reproducibility, by default 42
+        examples_per_shard : int, optional
+            Number of examples per shard, by default None
+        mb_per_shard : number, optional
+            Allow writer to estimate the number of examples per shard with a target memory usage in MB for each shard, by default None
         n_estimates_mb_per_example : int, optional
-            Number of examples to iterate over to estimate the amount of megabytes per
-            example.  This only runs if mb_per_shard is not None.  If fixed length
-            features are the only components to examples, then 1 should be sufficient as
-            all other examples will have the same memory usage and is therefore a
-            perfect estimate.  If variable length features are in examples, then higher
-            values of `n_estimates_mb_per_example` will lead to more accurate estimates
-            at the expense of more computational overhead. By default None.
+            Number of estimates to compute the number of examples per shard if mb_per_shard is provided, by default 1
+        n_estimates_mb_per_split_example : dict, optional
+            Similar to n_estimates_mb_per_example but for each individual split, by default None
+        verbose : int, optional
+            How much logging information to display.  Values are 0 (silent), 1, 2, 3 (most), by default 0
         """
 
         # Validate parameters
@@ -285,8 +352,6 @@ class Writer(object):
                 split_shard_info["name"] = split_name
 
                 splits_shards.append(split_shard_info)
-
-        # Get split meta information
 
         # Write shards
         self._write_shards(splits_shards, verbose=verbose)
