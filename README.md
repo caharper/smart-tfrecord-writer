@@ -177,11 +177,11 @@ Most projects could benefit from using TFRecords, but it requires a lot of readi
 
 ## Gotchas
 
-Right now, `tf.data.Dataset` objects are not supported.  A few assumptions in our codebase (knowing the length of the dataset for splitting into shards and writing individual shards instead of looping over a single object.  The second is problematic for a `tf.data.Dataset` because it is not guaranteed to be deterministic so we would need to have a separate handler for `tf.data.Dataset` objects.)
+Right now, `tf.data.Dataset` objects are not supported.  A few assumptions in our codebase (knowing the length of the dataset for splitting into shards and writing individual shards instead of looping over a single object) cause this limitation.  The second is problematic for a `tf.data.Dataset` because it is not guaranteed to be deterministic so we would need to have a separate handler for `tf.data.Dataset` objects.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [Apache License](LICENSE).
 
 ## Contact
 
