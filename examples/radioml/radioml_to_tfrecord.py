@@ -7,7 +7,7 @@ import numpy as np
 
 class RadioMLWriter(Writer):
     def extend_meta_data(self):
-        """Optional method that allows addtional information to be stored in meta data.
+        """Optional method that allows additional information to be stored in meta data.
 
         Returns
         -------

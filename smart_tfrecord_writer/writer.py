@@ -171,7 +171,10 @@ class Writer(object):
             split_bytes = 0
             for i, shard in enumerate(shard_pbar):
                 # Get the shard name
-                shard_name = f"{self.destination_directory}-{split_name}.tfrecord-{i:05d}-of-{num_shards:05d}"
+                dest_base = self.destination_directory.split("/")[-1]
+                shard_name = (
+                    f"{dest_base}-{split_name}.tfrecord-{i:05d}-of-{num_shards:05d}"
+                )
 
                 # Write single shard
                 bytes = self._write_shard(shard, shard_name, verbose=verbose)
@@ -346,7 +349,7 @@ class Writer(object):
 
                 if verbose > 0:
                     n_shards = len(split_shard_info["shards"])
-                    print("Computed {n_shards} shards for {split_name} split.")
+                    print(f"Computed {n_shards} shards for {split_name} split.")
 
                 # Populate splits_shards so they can be written
                 split_shard_info["name"] = split_name
