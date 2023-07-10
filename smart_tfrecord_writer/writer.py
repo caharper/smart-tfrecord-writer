@@ -7,6 +7,8 @@ import numpy as np
 from sklearn.utils import shuffle as sklearn_shuffle
 from tqdm import tqdm
 import os
+from .utils import convert_to_human_readable
+import termcolor
 
 
 class Writer(object):
@@ -349,7 +351,19 @@ class Writer(object):
 
                 if verbose > 0:
                     n_shards = len(split_shard_info["shards"])
-                    print(f"Computed {n_shards} shards for {split_name} split.")
+
+                    # Convert MB to human readable form in GB/MB
+                    total_mb = n_shards * mb_per_shard
+                    termcolor.cprint(
+                        termcolor.colored(
+                            f"Computed {n_shards} shards for {split_name} split.  Estimate: {convert_to_human_readable(total_mb)}",
+                            "green",
+                            attrs=["bold"],
+                        )
+                    )
+                    # print(
+                    #     f"Computed {n_shards} shards for {split_name} split.  Estimate: {convert_to_human_readable(total_mb)}"
+                    # )
 
                 # Populate splits_shards so they can be written
                 split_shard_info["name"] = split_name

@@ -111,8 +111,9 @@ class RadioMLWriter(Writer):
 
 if __name__ == "__main__":
     # Source and destination files
-    src_path = "./../../../Modulation/dataset/2018.01/GOLD_XYZ_OSC.0001_1024.hdf5"
-    dest_path = "./dest"
+    # TODO: Add paths to the source and destination files
+    src_path = "/path/to/2018.01/GOLD_XYZ_OSC.0001_1024.hdf5"
+    dest_path = "/path/to/radio_ml_2018.01"
     writer = RadioMLWriter(
         source_directory=src_path,
         destination_directory=dest_path,
@@ -138,7 +139,9 @@ if __name__ == "__main__":
     )
 
     # Use TFDS to load in the dataset into a tf.data.Dataset object
-    train_ds = tfds.load("dest", data_dir="./dest/", split="train", as_supervised=True)
+    train_ds = tfds.load(
+        "radio_ml_2018.01", data_dir=dest_path, split="train", as_supervised=True
+    )
 
     # Verify the data was loaded properly
     for data, label in train_ds.take(1):
