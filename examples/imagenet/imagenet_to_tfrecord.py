@@ -1,8 +1,6 @@
-import tensorflow as tf
 import tensorflow_datasets as tfds
 from smart_tfrecord_writer import Writer
 import numpy as np
-from glob import glob
 from PIL import Image
 import numpy as np
 import os
@@ -14,10 +12,13 @@ import pandas as pd
 # Wordnet IDs for the 1000 classes in ImageNet
 # TODO: Add path to the synset labels file
 synset_labels_path = "path/to/LOC_synset_mapping.txt"
-wnids_labels = ["unknown"]  # Add unknown for test set
+wnids_labels = []
 with open(synset_labels_path, "r") as f:
     for line in f:
         wnids_labels.append(line.split()[0])
+
+# Add unknown for test set (1001st class)
+wnids_labels.append("unknown")
 
 assert len(wnids_labels) == 1001
 
@@ -121,15 +122,14 @@ class ImageNetWriter(Writer):
         # Get the label of the image
         if "test" in filepath:
             label = "unknown"
-        else:
-            label = filepath.split("/")[-2]
-
-        if "val" in filepath:
+        elif "val" in filepath:
             # Get the filepath without the extension
             file_name = os.path.splitext(os.path.basename(filepath))[0]
 
             # Find the corresponding label in the validation labels dictionary
             label = val_label_dict[file_name]
+        else:
+            label = filepath.split("/")[-2]
 
         # Get the base filepath of the image
         file_name = filepath.split(
@@ -158,10 +158,23 @@ if __name__ == "__main__":
     # Subset the file list to only include the data files (no annotations)
     data_subset_list = [file for file in file_list if "ILSVRC/Data/" in file]
 
+    # Bad CRC-32 checksums for the following files (all training files)
+    bad_crc_files = [
+        "ILSVRC/Data/CLS-LOC/train/n01692333/n01692333_9111.JPEG",
+        "ILSVRC/Data/CLS-LOC/train/n01981276/n01981276_8715.JPEG",
+        "ILSVRC/Data/CLS-LOC/train/n02206856/n02206856_18.JPEG",
+        "ILSVRC/Data/CLS-LOC/train/n02510455/n02510455_9459.JPEG",
+        "ILSVRC/Data/CLS-LOC/train/n02951585/n02951585_18456.JPEG",
+        "ILSVRC/Data/CLS-LOC/train/n03337140/n03337140_6054.JPEG",
+    ]
+
     # Train, test, validations files
     train_files = [file for file in data_subset_list if "train" in file]
     val_files = [file for file in data_subset_list if "val" in file]
     test_files = [file for file in data_subset_list if "test" in file]
+
+    # Filter training files
+    train_files = [file for file in train_files if file not in bad_crc_files]
     print(f"Number of train files: {len(train_files)}")
     print(f"Number of val files: {len(val_files)}")
     print(f"Number of test files: {len(test_files)}")
