@@ -18,11 +18,6 @@ class Writer(object):
         self.source_directory = source_directory
         self.destination_directory = destination_directory
 
-        if not os.path.exists(self.source_directory):
-            raise ValueError(
-                f"Source directory, {self.source_directory}, does not exist."
-            )
-
         if not os.path.exists(self.destination_directory):
             os.mkdir(self.destination_directory)
 
