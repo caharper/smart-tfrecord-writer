@@ -111,7 +111,19 @@ smart-tfrecord-writer aims to assist researchers in saving their data into [TFRe
     If your data pipeline requires more processing, loading images for example, you can adjust the `process_data()` function as needed.  It will always receive a single element from the iterator you provide.  In the example above, indicies within an hdf5 file were provided.  This also could have been filepaths to load, a single row within a numpy array, etc.  The main takeaway is how you process a single example.
 
 ### Optional Functions
-  If you would like to provide additional meta information for your dataset, you can also subclass the `Writer.extend_meta_data()` function.  This is a simple function that allows you to provide additional details about your dataset.  Currently, the supported additional meta information fields are: `description`, `homepage`, `supervised_keys`, and `citation`.  `Writer.extend_meta_data()` assumes that these are returned in a tuple with this exact order as seen in the [examples directory](./examples/radioml/radioml_to_tfrecord.py).  Some of these are self-explanatory, but a potentially useful field is `supervised_keys`.  If your dataset contains labeled information for classification, you can provide the `(data, label)` pair from your `features` dictionary and use `tfds.load(..., as_supervised=True)` resulting in a [TensorFlow dataset](https://www.tensorflow.org/api_docs/python/tf/data/Dataset) (`tf.data.Dataset`) object that can be iterated over where each iteration yields a `(data, label)` pair that is compatible with most classification models and data pipelines.  An example of this can be seen in the [examples directory](./examples/radioml/radioml_to_tfrecord.py).
+  If you would like to provide additional meta information for your dataset, you can also subclass the `Writer.extend_meta_data()` function.  This is a simple function that allows you to provide additional details about your dataset.  Currently, the supported additional meta information fields are: `description`, `homepage`, `supervised_keys`, and `citation`.  `Writer.extend_meta_data()` assumes that these are returned in a tuple with this exact order as seen in the [examples directory](./examples/radioml/radioml_to_tfrecord.py).  Some of these are self-explanatory, but a potentially useful field is `supervised_keys`.  
+  
+  If your dataset contains labeled information for classification, you can provide the `(data, label)` pair from your `features` dictionary and use `tfds.load(..., as_supervised=True)` resulting in a [TensorFlow dataset](https://www.tensorflow.org/api_docs/python/tf/data/Dataset) (`tf.data.Dataset`) object that can be iterated over where each iteration yields a `(data, label)` pair that is compatible with most classification models and data pipelines.  An example of this can be seen in the [examples directory](./examples/radioml/radioml_to_tfrecord.py).
+
+  `extended_dataset_info()` may also be subclassed and will write additional dataset information to `extended_dataset_info.json`.  This may be helpful if you have additional information about your dataset that does not conform the the `tfds.DatasetInfo` object.  This is a simple function that returns a dictionary of the information you would like to save.  Because `extended_dataset_info()` is saved into a json file, the values must be json serializable. An example can be seen below:
+
+```python
+        def extended_dataset_info(self):
+            return {
+                "additional_info": "This is an example of additional dataset information.",
+                "more_info": "This is another example of additional dataset information.",
+            }
+```
 
 ### Datastructures for Writer.write_records()
 

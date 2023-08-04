@@ -8,7 +8,7 @@ README = (HERE / "README.md").read_text()
 
 setup(
     name="smart-tfrecord-writer",
-    version="0.1",
+    version="0.2",
     long_description=README,
     long_description_content_type="text/markdown",
     url="https://github.com/caharper/smart-tfrecord-writer.git",

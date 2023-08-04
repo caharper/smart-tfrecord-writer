@@ -9,6 +9,7 @@ from tqdm import tqdm
 import os
 from .utils import convert_to_human_readable
 import termcolor
+import json
 
 
 class Writer(object):
@@ -36,6 +37,31 @@ class Writer(object):
             os.mkdir(
                 os.path.join(self.destination_directory, self.config, self.version)
             )
+
+    def extended_dataset_info(self):
+        return None
+
+    @property
+    def _extended_dataset_info(self):
+        extended_info = self.extended_dataset_info()
+        if extended_info is not None:
+            # Verify extended data is json serializable
+            try:
+                json.dumps(extended_info)
+            except TypeError as e:
+                print(f"Extended dataset info is not json serializable.  Error: {e}")
+
+    def _write_extended_dataset_info(self, extended_dataset_info):
+        if self._extended_dataset_info is not None:
+            extended_dataset_info_path = os.path.join(
+                self.destination_directory,
+                self.config,
+                self.version,
+                "extended_dataset_info.json",
+            )
+            # Write extended dataset info to json
+            with open(extended_dataset_info_path, "w") as f:
+                json.dump(extended_dataset_info, f, indent=4)
 
     def extend_meta_data(self):
         description = ""
@@ -368,8 +394,8 @@ class Writer(object):
         # Write shards
         self._write_shards(splits_shards, verbose=verbose)
 
-    def _get_split_meta_info(self, split):
-        shards = split["shards"]
+        # Write extended dataset info
+        self._write_extended_dataset_info()
 
 
 def validate_n_estimates(n_estimates, err=""):
