@@ -10,6 +10,8 @@ import os
 from .utils import convert_to_human_readable
 import termcolor
 import json
+import multiprocessing
+from functools import partial
 
 
 class Writer(object):
@@ -51,7 +53,9 @@ class Writer(object):
             except TypeError as e:
                 print(f"Extended dataset info is not json serializable.  Error: {e}")
 
-    def _write_extended_dataset_info(self, extended_dataset_info):
+        return extended_info
+
+    def _write_extended_dataset_info(self):
         if self._extended_dataset_info is not None:
             extended_dataset_info_path = os.path.join(
                 self.destination_directory,
@@ -61,7 +65,7 @@ class Writer(object):
             )
             # Write extended dataset info to json
             with open(extended_dataset_info_path, "w") as f:
-                json.dump(extended_dataset_info, f, indent=4)
+                json.dump(self._extended_dataset_info, f, indent=4)
 
     def extend_meta_data(self):
         description = ""
@@ -150,7 +154,9 @@ class Writer(object):
         n_examples_per_shard = math.ceil((1 / avg_bytes_per_example) * byte_per_shard)
         return n_examples_per_shard
 
-    def _write_shard(self, shard_info, shard_name, verbose=0):
+    def _write_shard(self, shard_info_and_name, verbose=0):
+        shard_info, shard_name = shard_info_and_name
+
         # Writes a single shard to a file
         if verbose >= 3:
             shard_pbar = tqdm(
@@ -171,7 +177,7 @@ class Writer(object):
 
         return os.path.getsize(shard_name)
 
-    def _write_shards(self, splits_shards, verbose=0):
+    def _write_shards(self, splits_shards, verbose=0, n_workers=1):
         if verbose > 0:
             split_pbar = tqdm(splits_shards, desc="Writing splits")  # 1, ...,
         else:
@@ -182,28 +188,53 @@ class Writer(object):
         for split in split_pbar:
             split_name = split["name"]
             num_shards = len(split["shards"])
+            dest_base = self.destination_directory.split("/")[-1]
+            shard_names = [
+                f"{dest_base}-{split_name}.tfrecord-{i:05d}-of-{num_shards:05d}"
+                for i in range(len(split["shards"]))
+            ]
+
             if verbose >= 2:
                 shard_pbar = tqdm(
-                    split["shards"],
+                    zip(split["shards"], shard_names),
                     desc=f"Writing {split_name} shards",
+                    total=len(split["shards"]),
                     leave=False,
                 )
             else:
-                shard_pbar = split["shards"]
+                shard_pbar = zip(split["shards"], shard_names)
 
             split_bytes = 0
-            for i, shard in enumerate(shard_pbar):
-                # Get the shard name
-                dest_base = self.destination_directory.split("/")[-1]
-                shard_name = (
-                    f"{dest_base}-{split_name}.tfrecord-{i:05d}-of-{num_shards:05d}"
-                )
 
-                # Write single shard
-                bytes = self._write_shard(shard, shard_name, verbose=verbose)
+            if n_workers > 1:
+                verbose = min(verbose, 2)
+                # write_shard = lambda shard, shard_name: self._write_shard(
+                #     shard, shard_name, verbose=verbose
+                # )
 
-                # Get bytes information
-                split_bytes += bytes
+                # Create a partial function with _write_shard and verbose arguments
+                partial_write_shard = partial(self._write_shard, verbose=verbose)
+
+                with multiprocessing.Pool(processes=n_workers) as pool:
+                    for bytes in pool.imap_unordered(
+                        partial_write_shard, shard_pbar, chunksize=n_workers
+                    ):
+                        split_bytes += bytes
+                        shard_pbar.update(1)
+
+            else:
+                for shard_info, shard_name in shard_pbar:
+                    # Get the shard name
+                    # dest_base = self.destination_directory.split("/")[-1]
+                    # shard_name = (
+                    #     f"{dest_base}-{split_name}.tfrecord-{i:05d}-of-{num_shards:05d}"
+                    # )
+
+                    # Write single shard
+                    bytes = self._write_shard((shard_info, shard_name), verbose=verbose)
+
+                    # Get bytes information
+                    split_bytes += bytes
 
             # Create split information
             split_infos.append(
@@ -235,6 +266,7 @@ class Writer(object):
         mb_per_shard=None,
         n_estimates_mb_per_example=1,
         n_estimates_mb_per_split_example=None,
+        n_workers=1,
         verbose=0,
     ):
         """Writes data into a TFRecord format.
@@ -257,6 +289,8 @@ class Writer(object):
             Number of estimates to compute the number of examples per shard if mb_per_shard is provided, by default 1
         n_estimates_mb_per_split_example : dict, optional
             Similar to n_estimates_mb_per_example but for each individual split, by default None
+        n_workers : int, optional
+            Number of workers to use for multiprocessing, by default 1
         verbose : int, optional
             How much logging information to display.  Values are 0 (silent), 1, 2, 3 (most), by default 0
         """
