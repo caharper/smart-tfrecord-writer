@@ -4,3 +4,5 @@ __pycache__
 *.tfrecord
 *smart_tfrecord_writer.egg-info/
 *.egg
+poetry.lock
+/dist/

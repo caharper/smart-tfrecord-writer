@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "smart-tfrecord-writer"
+version = "0.1.0"
+description = "A Python package to write TFRecord files easily and seamlessly into Tensorflow Datasets format."
+authors = ["caharper <caharper@smu.edu>"]
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/caharper/smart-tfrecord-writer"
+keywords = ["tfrecord", "dataset", "machine learning"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.12"
+tensorflow = ">=2.0"
+termcolor = "^2.4.0"
+scikit-learn = "^1.4.0"
+tqdm = "^4.66.1"
+tensorflow-datasets = "^4.9.4"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

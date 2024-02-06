@@ -1,24 +1,24 @@
-# from abc import abstractmethod
 import tensorflow as tf
 import tensorflow_datasets as tfds
 import math
 import warnings
-import numpy as np
 from sklearn.utils import shuffle as sklearn_shuffle
 from tqdm import tqdm
 import os
-from .utils import convert_to_human_readable
 import termcolor
 import json
 import multiprocessing
 from functools import partial
+from smart_tfrecord_writer.utils import convert_to_human_readable
 
 
 class Writer(object):
     def __init__(
-        self, source_directory, destination_directory, config=None, version="1.0.0"
+        self,
+        destination_directory,
+        config=None,
+        version="1.0.0",
     ):
-        self.source_directory = source_directory
         self.destination_directory = destination_directory
 
         if not os.path.exists(self.destination_directory):
@@ -39,6 +39,8 @@ class Writer(object):
             os.mkdir(
                 os.path.join(self.destination_directory, self.config, self.version)
             )
+
+        self._validated = False
 
     def extended_dataset_info(self):
         return None
@@ -118,7 +120,7 @@ class Writer(object):
         `process_data` will operate under a single example from the info passed to
         `write_records`.
 
-        ***Must return a named dictionary (so that _estimate_mb_per_example will work)
+        Must return a named dictionary (so that _estimate_mb_per_example will work)
         """
         raise NotImplementedError(
             f"process_data must be defined when subclassing Writer"
@@ -126,8 +128,24 @@ class Writer(object):
 
     def _process_data(self, example):
         processed_data = self.process_data(example)
-        # print(self._features.to_json_content())
+
+        # Validate data if not already validated
+        if not self._validated:
+            self._validate_data(processed_data)
+
         return self._features.serialize_example(processed_data)
+
+    def _validate_data(self, example):
+        feature_keys = list(self._features.keys())
+        for key in list(example.keys()):
+            if key not in self._features:
+                raise ValueError(
+                    f"{key} <from `process_data()` is not a valid feature "
+                    f"for the dataset.  Choose from the keys created in "
+                    f"`features()`.  Valid keys defined in `features()`: {feature_keys}"
+                )
+
+        self._validated = True
 
     def _estimate_bytes_per_example(self, info, n_estimates, verbose=0):
         if verbose > 0:
@@ -136,8 +154,7 @@ class Writer(object):
         total_bytes = 0
 
         for instance in info[:n_estimates]:
-            # processed_data = self.process_data(instance)
-            # serialized_data = self._features.serialize_example(processed_data)
+            # Serialize the data
             serialized_data = self._process_data(instance)
             total_bytes += len(serialized_data)
 
@@ -170,14 +187,13 @@ class Writer(object):
         )
         with tf.io.TFRecordWriter(shard_name) as out:
             for example in shard_pbar:
-                # processed_data = self.process_data(example)
-                # serialized_data = self._features.serialize_example(processed_data)
+                # Serialize the data
                 serialized_data = self._process_data(example)
                 out.write(serialized_data)
 
         return os.path.getsize(shard_name)
 
-    def _write_shards(self, splits_shards, verbose=0, n_workers=1):
+    def _write_shards(self, splits_shards, verbose=0):
         if verbose > 0:
             split_pbar = tqdm(splits_shards, desc="Writing splits")  # 1, ...,
         else:
@@ -206,35 +222,13 @@ class Writer(object):
 
             split_bytes = 0
 
-            if n_workers > 1:
-                verbose = min(verbose, 2)
-                # write_shard = lambda shard, shard_name: self._write_shard(
-                #     shard, shard_name, verbose=verbose
-                # )
+            for shard_info, shard_name in shard_pbar:
 
-                # Create a partial function with _write_shard and verbose arguments
-                partial_write_shard = partial(self._write_shard, verbose=verbose)
+                # Write single shard
+                bytes = self._write_shard((shard_info, shard_name), verbose=verbose)
 
-                with multiprocessing.Pool(processes=n_workers) as pool:
-                    for bytes in pool.imap_unordered(
-                        partial_write_shard, shard_pbar, chunksize=n_workers
-                    ):
-                        split_bytes += bytes
-                        shard_pbar.update(1)
-
-            else:
-                for shard_info, shard_name in shard_pbar:
-                    # Get the shard name
-                    # dest_base = self.destination_directory.split("/")[-1]
-                    # shard_name = (
-                    #     f"{dest_base}-{split_name}.tfrecord-{i:05d}-of-{num_shards:05d}"
-                    # )
-
-                    # Write single shard
-                    bytes = self._write_shard((shard_info, shard_name), verbose=verbose)
-
-                    # Get bytes information
-                    split_bytes += bytes
+                # Get bytes information
+                split_bytes += bytes
 
             # Create split information
             split_infos.append(
@@ -242,17 +236,37 @@ class Writer(object):
                     name=split_name,
                     shard_lengths=[len(shard) for shard in split["shards"]],
                     num_bytes=split_bytes,
-                    # filename_template="{DATASET}-{SPLIT}.{FILEFORMAT}-{SHARD_X_OF_Y}",
                 )
             )
 
         self._write_meta_data(split_infos)
 
+    @staticmethod
+    def split(a, n):
+        """Splits a into n approximately equal parts.
+
+        Credit to user tixxit: https://stackoverflow.com/a/2135920
+
+        Parameters
+        ----------
+        a : array-like
+            Array to be split
+        n : int
+            Number of splits
+
+        Returns
+        -------
+        array-like
+            n sub-arrays of a of approximately equal size
+        """
+        k, m = divmod(len(a), n)
+        return [a[i * k + min(i, m) : (i + 1) * k + min(i + 1, m)] for i in range(n)]
+
     def _create_shards(self, info, examples_per_shard):
         n_shards = math.ceil(len(info) / examples_per_shard)
 
         # Split into shards
-        split_shards = np.array_split(info, n_shards)
+        split_shards = Writer.split(info, n_shards)
 
         return split_shards
 
@@ -266,7 +280,6 @@ class Writer(object):
         mb_per_shard=None,
         n_estimates_mb_per_example=1,
         n_estimates_mb_per_split_example=None,
-        n_workers=1,
         verbose=0,
     ):
         """Writes data into a TFRecord format.
@@ -274,7 +287,8 @@ class Writer(object):
         Parameters
         ----------
         splits_info : list, optional
-            List of dictionaries containing information to be iterated over, by default None
+            List of dictionaries containing information to be iterated over, by default
+            None
         splits_shards : list, optional
             List of precomputed shards to be saved and iterated over, by default None
         shuffle : bool, optional
@@ -284,15 +298,17 @@ class Writer(object):
         examples_per_shard : int, optional
             Number of examples per shard, by default None
         mb_per_shard : number, optional
-            Allow writer to estimate the number of examples per shard with a target memory usage in MB for each shard, by default None
+            Allow writer to estimate the number of examples per shard with a target
+            memory usage in MB for each shard, by default None
         n_estimates_mb_per_example : int, optional
-            Number of estimates to compute the number of examples per shard if mb_per_shard is provided, by default 1
+            Number of estimates to compute the number of examples per shard if
+            mb_per_shard is provided, by default 1
         n_estimates_mb_per_split_example : dict, optional
-            Similar to n_estimates_mb_per_example but for each individual split, by default None
-        n_workers : int, optional
-            Number of workers to use for multiprocessing, by default 1
+            Similar to n_estimates_mb_per_example but for each individual split, by
+            default None
         verbose : int, optional
-            How much logging information to display.  Values are 0 (silent), 1, 2, 3 (most), by default 0
+            How much logging information to display.  Values are 0 (silent), 1, 2, 3
+            (most), by default 0
         """
 
         # Validate parameters
@@ -308,7 +324,8 @@ class Writer(object):
 
             if not any(contains_info):
                 raise ValueError(
-                    f"Information must be supplied for at least one of {' ,'.join(split_names)}."
+                    f"Information must be supplied for at least one of "
+                    f"{' ,'.join(split_names)}."
                 )
 
         if splits_info is None and splits_shards is not None:
@@ -318,7 +335,8 @@ class Writer(object):
 
             if not any(contains_shards):
                 raise ValueError(
-                    f"Information must be supplied for at least one of {' ,'.join(split_names)}."
+                    f"Information must be supplied for at least one of "
+                    f"{' ,'.join(split_names)}."
                 )
 
             if mb_per_shard is not None:
@@ -331,10 +349,10 @@ class Writer(object):
             if n_estimates_mb_per_split_example is not None:
                 if n_estimates_mb_per_example is not None:
                     warnings.warn(
-                        "Ignoring n_estimates_mb_per_example as n_estimates_mb_per_split_example is not None.  This may not be desired behavior."
+                        "Ignoring n_estimates_mb_per_example as "
+                        "n_estimates_mb_per_split_example is not None.  This may not "
+                        "be desired behavior."
                     )
-
-                ...
 
         # Setup shards
         if splits_shards is not None:
@@ -363,11 +381,14 @@ class Writer(object):
 
                 if split_examples_per_shard is None and mb_per_shard is None:
                     raise ValueError(
-                        f"Either mb_per_shard must be specified or examples_per_shard must be specified in splits_info for {split_name} split."
+                        f"Either mb_per_shard must be specified or examples_per_shard "
+                        f"must be specified in splits_info for {split_name} split."
                     )
                 if split_examples_per_shard is not None and mb_per_shard is not None:
                     warnings.warn(
-                        f"Ignoring mb_per_shard as split_examples_per_shard is not None for {split_name} split.  This may not be desired behavior."
+                        f"Ignoring mb_per_shard as split_examples_per_shard is not "
+                        f"None for {split_name} split.  This may not be desired "
+                        "behavior."
                     )
 
                 # If compute elements per shard based on memory
@@ -381,7 +402,10 @@ class Writer(object):
                             and n_estimates_mb_per_example is not None
                         ):
                             warnings.warn(
-                                f"Ignoring n_estimates_mb_per_example as n_estimates_mb_per_split_example is not None for {split_name} split.  This may not be desired behavior."
+                                f"Ignoring n_estimates_mb_per_example as "
+                                f"n_estimates_mb_per_split_example is not None for "
+                                f"{split_name} split.  This may not be desired "
+                                f"behavior."
                             )
                     else:
                         n_estimates = n_estimates_mb_per_example
@@ -395,9 +419,10 @@ class Writer(object):
                         verbose=verbose,
                     )
 
-                # Instead of splitting into shards, it may be better to just compute the
-                # number of elements in each shard.  This would make the code more
-                # compatible with tf.data.Datasets.
+                print(
+                    f"computed split_examples_per_shard: {split_examples_per_shard} "
+                    f"for {split_name} split."
+                )
 
                 # Split the info into shards
                 split_shard_info["shards"] = self._create_shards(
@@ -411,14 +436,12 @@ class Writer(object):
                     total_mb = n_shards * mb_per_shard
                     termcolor.cprint(
                         termcolor.colored(
-                            f"Computed {n_shards} shards for {split_name} split.  Estimate: {convert_to_human_readable(total_mb)}",
+                            f"Computed {n_shards} shards for {split_name} split. "
+                            f"Estimate: {convert_to_human_readable(total_mb)}",
                             "green",
                             attrs=["bold"],
                         )
                     )
-                    # print(
-                    #     f"Computed {n_shards} shards for {split_name} split.  Estimate: {convert_to_human_readable(total_mb)}"
-                    # )
 
                 # Populate splits_shards so they can be written
                 split_shard_info["name"] = split_name

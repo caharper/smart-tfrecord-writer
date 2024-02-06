@@ -6,6 +6,10 @@ import numpy as np
 
 
 class RadioMLWriter(Writer):
+    def __init__(self, source_directory, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.source_directory = source_directory
+
     def extend_meta_data(self):
         """Optional method that allows additional information to be stored in meta data.
 
@@ -96,9 +100,9 @@ class RadioMLWriter(Writer):
             label = f["Y"][index]
             snr = f["Z"][index]
 
-            parsed_instance[
-                "rf_signal"
-            ] = rf_signal  # Generic Tensor feature expects shape of (1024, 2)
+            parsed_instance["rf_signal"] = (
+                rf_signal  # Generic Tensor feature expects shape of (1024, 2)
+            )
             parsed_instance["label"] = np.argmax(
                 label
             )  # ClassLabel feature expects single integer value
