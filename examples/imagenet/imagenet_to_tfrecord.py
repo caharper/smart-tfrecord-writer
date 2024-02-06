@@ -31,8 +31,9 @@ val_label_dict = {id_: label for id_, label in zip(ids, labels)}
 
 
 class ImageNetWriter(Writer):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, source_directory, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.source_directory = source_directory
         self.zip_ref = zipfile.ZipFile(self.source_directory, "r")
 
     def __del__(self):
