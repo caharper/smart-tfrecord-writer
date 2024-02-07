@@ -3,7 +3,7 @@ from smart_tfrecord_writer import Writer
 import numpy as np
 
 
-class RadioMLWriter(Writer):
+class NumpyWriter(Writer):
     def extend_meta_data(self):
         """Optional method that allows additional information to be stored in meta data.
 
@@ -76,8 +76,7 @@ class RadioMLWriter(Writer):
 if __name__ == "__main__":
     # TODO: Add paths to the destination files
     dest_path = "/path/to/numpy_tfrecord"
-    dest_path = "./../../../../../Downloads/numpy_tfrecord"
-    writer = RadioMLWriter(
+    writer = NumpyWriter(
         destination_directory=dest_path,
     )
 
